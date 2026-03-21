@@ -269,10 +269,4 @@ saveRDS(nb_anthro_d, here("data", "derived", "nb_anthro_d.RDS"))
 # -----------------------------------------------------------------------------
 message("\n--- 02_variables_clinicas.R completado ---")
 message("Archivos guardados en: ", here("data", "derived"))
-message("Siguiente paso: correr 03_mega_base.R")
-
-
-
-nb_anthro_nb %>% 
-select(z.nb.cca) %>% 
-print()
+message("Siguiente paso: correr 03_metadata_completa.R")
