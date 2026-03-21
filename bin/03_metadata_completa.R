@@ -12,7 +12,7 @@
 #   data/derived/  — variables clínicas de 02_variables_clinicas.R
 
 # Salidas:
-#   raw_data.RDS        — Mega base completa
+#   master_data.RDS        — Mega base completa
 #   colnames.RDA        — Vectores de nombres de columna por tabla
 
 # Anterior: 02_variables_clinicas.R
@@ -60,7 +60,7 @@ message("Participantes en mom_demo (base de referencia): ", n_inicio)
 # ::::::::::::::::::::::::::::::
 # Construcción de la mega base
 # ::::::::::::::::::::::::::::::
-raw_data <- mom_demo %>%
+master_data <- mom_demo %>%
     left_join(mom_anthro, by = "key") %>%
     left_join(mom_bx, by = "key") %>%
     left_join(mom_diet, by = "key") %>%
@@ -72,7 +72,7 @@ raw_data <- mom_demo %>%
 # -----------------------------------------------------------------------------
 # Validación
 # -----------------------------------------------------------------------------
-n_final <- nrow(raw_data)
+n_final <- nrow(master_data)
 
 message("\n--- Validación del join ---")
 message("Filas antes : ", n_inicio)
@@ -85,7 +85,7 @@ if (n_final != n_inicio) {
 }
 
 ## Revisar duplicados en la llave
-duplicados <- raw_data %>%
+duplicados <- master_data %>%
     count(key) %>%
     filter(n > 1)
 if (nrow(duplicados) > 0) {
@@ -105,8 +105,8 @@ vars_clave <- c(
     "hm.1"
 ) # hm_char
 for (v in vars_clave) {
-    if (v %in% colnames(raw_data)) {
-        n_na <- sum(is.na(raw_data[[v]]))
+    if (v %in% colnames(master_data)) {
+        n_na <- sum(is.na(master_data[[v]]))
         message("  ", v, ": ", n_na, " NAs (", round(n_na / n_final * 100, 1), "%)")
     }
 }
@@ -114,8 +114,8 @@ for (v in vars_clave) {
 # ::::::::::::::::::::::::::::::
 # Exportación
 # ::::::::::::::::::::::::::::::
-saveRDS(raw_data, here("data", "processed", "raw_data.RDS"))
-message("\nraw_data guardado: ", nrow(raw_data), " filas x ", ncol(raw_data), " columnas")
+saveRDS(master_data, here("data", "processed", "master_data.RDS"))
+message("\nmaster_data guardado: ", nrow(master_data), " filas x ", ncol(master_data), " columnas")
 
 ## Vectores de nombres de columna por tabla (útiles para selección posterior)
 colnames_mom_demo <- colnames(mom_demo)
@@ -146,15 +146,15 @@ message("colnames.RDA guardado.")
 # Para seleccionar solo las variables necesarias en un análisis específico:
 #
 #   load(here("data", "colnames.RDA"))
-#   raw_data <- readRDS(here("data", "raw_data.RDS"))
+#   master_data <- readRDS(here("data", "master_data.RDS"))
 #
 #   # Ejemplo: IMC materno vs antropometría neonatal
-#   datos_analisis <- raw_data %>%
+#   datos_analisis <- master_data %>%
 #     select(px_num, nutc.imc.2, nutc.fat.2,
 #            all_of(colnames_nb_anthro),
 #            z.birth.wa, z.nb.wa)
 #
-# raw_data nunca se modifica — cada análisis crea su propio subconjunto.
+# master_data nunca se modifica — cada análisis crea su propio subconjunto.
 
 message("\n--- 03_mega_base.R completado ---")
 message("Siguiente paso: scripts de análisis (04 en adelante)")
