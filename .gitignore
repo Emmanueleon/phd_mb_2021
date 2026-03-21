@@ -1,11 +1,24 @@
-# Ignorar datos crudos y procesados
-data/
-meta/
-*.RDS
+# Datos — ignorar contenido, conservar estructura
+data/raw/*
+data/derived/*
+data/processed/*
+data/microbiota/raw/*
+
+# Metadatos con info de participantes
+meta/*
+
+# Artefactos QIIME2
+out/qiime2/
+out/phyloseq/
 *.qza
 *.qzv
 
-# Ignorar basura de sistema
+# Archivos R serializados
+*.RDS
+*.RData
+*.RDA
+
+# Sistema
 .DS_Store
 .Rhistory
 .Rproj.user/
