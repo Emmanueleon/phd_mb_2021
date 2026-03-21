@@ -1,0 +1,11 @@
+# Ignorar datos crudos y procesados
+data/
+meta/
+*.RDS
+*.qza
+*.qzv
+
+# Ignorar basura de sistema
+.DS_Store
+.Rhistory
+.Rproj.user/
