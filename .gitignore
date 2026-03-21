@@ -1,22 +1,11 @@
-# Datos — ignorar contenido, conservar estructura
+# Datos procesados
 data/raw/*
 data/derived/*
 data/processed/*
-data/microbiota/raw/*
 
-# Metadatos con info de participantes
-meta/*
-
-# Artefactos QIIME2
+# Outputs
 out/qiime2/
 out/phyloseq/
-*.qza
-*.qzv
-
-# Archivos R serializados
-*.RDS
-*.RData
-*.RDA
 
 # Sistema
 .DS_Store
