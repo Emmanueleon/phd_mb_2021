@@ -32,6 +32,10 @@ suppressPackageStartupMessages({
     library(here)
 })
 
+## Cear carpeta de salida
+dir.create(here("data", "processed"), recursive = TRUE, showWarnings = FALSE)
+
+
 # ::::::::::::::::::::::::::::::
 # Cargar todas las bases
 # ::::::::::::::::::::::::::::::
@@ -110,7 +114,7 @@ for (v in vars_clave) {
 # ::::::::::::::::::::::::::::::
 # Exportación
 # ::::::::::::::::::::::::::::::
-saveRDS(raw_data, here("data", "raw_data.RDS"))
+saveRDS(raw_data, here("data", "processed", "raw_data.RDS"))
 message("\nraw_data guardado: ", nrow(raw_data), " filas x ", ncol(raw_data), " columnas")
 
 ## Vectores de nombres de columna por tabla (útiles para selección posterior)
@@ -131,7 +135,7 @@ save(colnames_mom_demo,
     colnames_hm_char,
     colnames_hm_practice,
     colnames_feces_char,
-    file = here("data", "colnames.RDA")
+    file = here("data","processed","colnames.RDA")
 )
 
 message("colnames.RDA guardado.")
