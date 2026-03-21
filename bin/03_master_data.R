@@ -17,7 +17,7 @@
 
 # Anterior: 02_variables_clinicas.R
 
-# Siguiente: cualquier script de análisis (04 en adelante)
+# Siguiente: 04_importacion_pools.R
 
 # ::::::::::::::::::::::::::::
 # Preparación del ambiente
