@@ -12,41 +12,43 @@
 # =============================================================================
 # 1. IMPORTACIÓN PHYLOSEQ
 # =============================================================================
- 
+
 #' build_phyloseq
 #' @description Construye un objeto phyloseq desde los archivos exportados por QIIME2
 #' @param pool Nombre del pool (ej. "PoolA")
 #' @param metadata_path Ruta al archivo .tsv de metadatos del pool
 #' @return Objeto phyloseq con OTU, taxonomía, árbol y metadatos
 build_phyloseq <- function(pool, metadata_path) {
- 
     export_dir <- here::here("out", "export", pool)
- 
+
     ## Feature table
     biom_data <- biomformat::read_biom(file.path(export_dir, "feature-table.biom"))
-    otu        <- phyloseq::otu_table(as(biom_data, "matrix"), taxa_are_rows = TRUE)
- 
+    otu <- phyloseq::otu_table(as(biom_data, "matrix"), taxa_are_rows = TRUE)
+
     ## Taxonomía — parsear niveles separados por ";"
     tax_raw <- readr::read_tsv(
         file.path(export_dir, "taxonomy.tsv"),
         show_col_types = FALSE
     )
- 
+
     tax_mat <- tax_raw %>%
         tidyr::separate(Taxon,
-                        into = c("Kingdom", "Phylum", "Class", "Order",
-                                 "Family", "Genus", "Species"),
-                        sep  = ";\\s*",
-                        fill = "right") %>%
+            into = c(
+                "Kingdom", "Phylum", "Class", "Order",
+                "Family", "Genus", "Species"
+            ),
+            sep = ";\\s*",
+            fill = "right"
+        ) %>%
         tibble::column_to_rownames("Feature ID") %>%
         dplyr::select(-Confidence) %>%
         as.matrix()
- 
+
     tax <- phyloseq::tax_table(tax_mat)
- 
+
     ## Árbol filogenético
     tree <- ape::read.tree(file.path(export_dir, "tree.nwk"))
- 
+
     ## Metadatos
     meta_raw <- readr::read_tsv(
         metadata_path,
@@ -55,19 +57,19 @@ build_phyloseq <- function(pool, metadata_path) {
     ) %>%
         dplyr::rename(sample_id = `sample-id`) %>%
         tibble::column_to_rownames("sample_id")
- 
+
     meta <- phyloseq::sample_data(meta_raw)
- 
+
     ## Construir phyloseq
     ps <- phyloseq::phyloseq(otu, tax, tree, meta)
     return(ps)
 }
- 
- 
+
+
 # =============================================================================
 # 2. ESTADÍSTICA GENERAL
 # =============================================================================
- 
+
 #' desc_stats
 #' @description Calcula estadística descriptiva de un dataframe numérico
 #' @param df Dataframe con variables numéricas (usar select() previamente)
@@ -89,8 +91,8 @@ desc_stats <- function(df) {
         ), .id = "variable") %>%
         dplyr::mutate(dplyr::across(where(is.numeric), round, 2))
 }
- 
- 
+
+
 #' descshap_tbl
 #' @description Estadística descriptiva + prueba de Shapiro-Wilk por grupo
 #' @param df Dataframe
@@ -99,30 +101,29 @@ desc_stats <- function(df) {
 #' @param var_vector Vector de nombres de variables a evaluar
 #' @return Tibble con descriptivos, p-valor Shapiro y distribución
 descshap_tbl <- function(df, var, no_group, var_vector) {
- 
     df_nested <- df %>%
         dplyr::group_by({{ var }}) %>%
         tidyr::nest() %>%
         dplyr::arrange({{ var }})
- 
+
     df_plucked <- df_nested %>%
         purrr::pluck("data", no_group) %>%
         dplyr::select(dplyr::all_of(var_vector))
- 
+
     shap_test <- df_plucked %>%
         purrr::map(shapiro.test) %>%
         purrr::map_df(broom::tidy, .id = "variable") %>%
         dplyr::mutate(distribution = ifelse(p.value >= 0.05, "Parametrica", "No Parametrica"))
- 
+
     desc_tbl <- df_plucked %>%
         desc_stats() %>%
         dplyr::left_join(shap_test, by = "variable") %>%
         dplyr::mutate(group = df_nested[[no_group, 1]])
- 
+
     return(desc_tbl)
 }
- 
- 
+
+
 #' inferential_tests
 #' @description Comparación entre 2 grupos con corrección FDR
 #' @param df Dataframe
@@ -138,20 +139,20 @@ inferential_tests <- function(df, var, method) {
         rstatix::add_significance() %>%
         dplyr::mutate(dplyr::across(where(is.numeric), round, 5)) %>%
         dplyr::mutate(stars = dplyr::case_when(
-            p.value < 0.001                      ~ "***",
+            p.value < 0.001 ~ "***",
             dplyr::between(p.value, 0.001, 0.009) ~ "**",
-            dplyr::between(p.value, 0.01,  0.049) ~ "*",
-            dplyr::between(p.value, 0.05,  0.079) ~ "#",
-            p.value > 0.08                       ~ "ns",
+            dplyr::between(p.value, 0.01, 0.049) ~ "*",
+            dplyr::between(p.value, 0.05, 0.079) ~ "#",
+            p.value > 0.08 ~ "ns",
             TRUE ~ ""
         ))
 }
- 
- 
+
+
 # =============================================================================
 # 3. CORRELACIONES
 # =============================================================================
- 
+
 #' cor_df
 #' @description Tabla de correlación con r, n y p (Pearson o Spearman)
 #' @param df Dataframe numérico
@@ -159,11 +160,13 @@ inferential_tests <- function(df, var, method) {
 #' @return Tibble en formato largo con r, P, n y flags de significancia
 cor_df <- function(df, method = "pearson") {
     M <- Hmisc::rcorr(as.matrix(df), type = method)
- 
+
     purrr::map(M, ~ data.frame(.x)) %>%
         purrr::map(~ tibble::rownames_to_column(.x, var = "measure1")) %>%
-        purrr::map(~ tidyr::pivot_longer(.x, -measure1, names_to = "measure2",
-                                         values_to = "value")) %>%
+        purrr::map(~ tidyr::pivot_longer(.x, -measure1,
+            names_to = "measure2",
+            values_to = "value"
+        )) %>%
         dplyr::bind_rows(.id = "id") %>%
         tidyr::pivot_wider(names_from = id, values_from = value) %>%
         dplyr::mutate(
@@ -172,26 +175,26 @@ cor_df <- function(df, method = "pearson") {
             r_if_sig = ifelse(P < 0.05, r, NA)
         )
 }
- 
+
 # Wrappers para compatibilidad con código anterior
 #' @describeIn cor_df Correlación de Pearson (wrapper)
 cors_pearson <- function(df) cor_df(df, method = "pearson")
- 
+
 #' @describeIn cor_df Correlación de Spearman (wrapper)
 cors_spearman <- function(df) cor_df(df, method = "spearman")
- 
+
 #' @describeIn cor_df Tabla formateada de correlación (Pearson o Spearman)
 formatted_cor <- function(df, method = "pearson") cor_df(df, method = method)
- 
+
 # Alias para compatibilidad con código anterior
 formatted_corpea <- function(df) cor_df(df, method = "pearson")
 formatted_corsper <- function(df) cor_df(df, method = "spearman")
- 
- 
+
+
 # =============================================================================
 # 4. UTILIDADES GRÁFICAS
 # =============================================================================
- 
+
 #' get_only_legend
 #' @description Extrae la leyenda de un gráfico ggplot
 #' @param plot Objeto ggplot
@@ -201,12 +204,12 @@ get_only_legend <- function(plot) {
     legend_plot <- which(sapply(plot_table$grobs, function(x) x$name) == "guide-box")
     plot_table$grobs[[legend_plot]]
 }
- 
- 
+
+
 # =============================================================================
 # 5. CALIDAD Y FILTRADO
 # =============================================================================
- 
+
 #' reads_tbl
 #' @description Tabla con número de lecturas por muestra
 #' @param phy_object Objeto phyloseq
@@ -219,8 +222,8 @@ reads_tbl <- function(phy_object, sample) {
         dplyr::mutate(sample_type = factor(sample_type, levels = sample)) %>%
         dplyr::select(sample_id, sample_type, reads)
 }
- 
- 
+
+
 #' histogram_plot
 #' @description Histograma de distribución de lecturas por tipo de muestra
 #' @param phy_object Objeto phyloseq
@@ -232,41 +235,54 @@ reads_tbl <- function(phy_object, sample) {
 #' @param labeller Named vector para facet labels
 #' @return Objeto ggplot
 histogram_plot <- function(phy_object, breaks, color, labels, title, subtitle, labeller) {
- 
     phyloseq::sample_data(phy_object)$reads <- phyloseq::sample_sums(phy_object)
- 
+
     as.data.frame(phyloseq::sample_data(phy_object)) %>%
         tibble::as_tibble() %>%
         dplyr::mutate(sample_type = factor(sample_type, levels = breaks)) %>%
         ggplot2::ggplot(ggplot2::aes(x = reads, fill = sample_type)) +
-        ggplot2::geom_histogram(alpha = 0.8, binwidth = 10000,
-                                breaks = seq(0, 90000, by = 5000)) +
-        ggplot2::geom_vline(xintercept = 5000, linetype = "dashed",
-                            color = "red", linewidth = 1.2) +
-        ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 10),
-                                    breaks = seq(0, 10, by = 2)) +
-        ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 90000),
-                                    labels = scales::label_number(),
-                                    breaks = seq(0, 90000, by = 10000)) +
-        ggplot2::scale_fill_manual(name = NULL, breaks = breaks,
-                                   values = color, labels = labels) +
-        ggplot2::labs(title = title, subtitle = subtitle,
-                      x = "\nTamaño de la librería (lecturas)",
-                      y = "No. muestras\n") +
+        ggplot2::geom_histogram(
+            alpha = 0.8, binwidth = 10000,
+            breaks = seq(0, 90000, by = 5000)
+        ) +
+        ggplot2::geom_vline(
+            xintercept = 5000, linetype = "dashed",
+            color = "red", linewidth = 1.2
+        ) +
+        ggplot2::scale_y_continuous(
+            expand = c(0, 0), limits = c(0, 10),
+            breaks = seq(0, 10, by = 2)
+        ) +
+        ggplot2::scale_x_continuous(
+            expand = c(0, 0), limits = c(0, 90000),
+            labels = scales::label_number(),
+            breaks = seq(0, 90000, by = 10000)
+        ) +
+        ggplot2::scale_fill_manual(
+            name = NULL, breaks = breaks,
+            values = color, labels = labels
+        ) +
+        ggplot2::labs(
+            title = title, subtitle = subtitle,
+            x = "\nTamaño de la librería (lecturas)",
+            y = "No. muestras\n"
+        ) +
         ggplot2::theme_minimal() +
-        ggplot2::facet_wrap(~ sample_type, ncol = 1,
-                            labeller = ggplot2::as_labeller(labeller)) +
+        ggplot2::facet_wrap(~sample_type,
+            ncol = 1,
+            labeller = ggplot2::as_labeller(labeller)
+        ) +
         ggplot2::theme(
-            text             = ggplot2::element_text(size = 22, color = "black"),
-            legend.position  = "none",
-            plot.title       = ggplot2::element_text(size = 20, face = "bold"),
+            text = ggplot2::element_text(size = 22, color = "black"),
+            legend.position = "none",
+            plot.title = ggplot2::element_text(size = 20, face = "bold"),
             strip.background = ggplot2::element_rect(color = "gray", fill = "gray"),
-            strip.text.x     = ggplot2::element_text(size = 15, color = "black"),
+            strip.text.x = ggplot2::element_text(size = 15, color = "black"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 #' rarecurve_plot
 #' @description Curva de rarefacción para evaluar profundidad de secuenciación
 #' @param phy_object Objeto phyloseq
@@ -278,65 +294,71 @@ histogram_plot <- function(phy_object, breaks, color, labels, title, subtitle, l
 #' @param subtitle Subtítulo
 #' @return Objeto ggplot
 rarecurve_plot <- function(phy_object, var, breaks, var_color, labels, title, subtitle) {
- 
-    graph_rarcurve <- phyloseq.extended::ggrare(phy_object, step = 50,
-                                                 color = var, label = NULL, se = FALSE)
+    graph_rarcurve <- phyloseq.extended::ggrare(phy_object,
+        step = 50,
+        color = var, label = NULL, se = FALSE
+    )
     graph_rarcurve +
         ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 600)) +
-        ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 90000),
-                                    labels = scales::label_number(),
-                                    breaks = seq(0, 90000, by = 10000)) +
-        ggplot2::scale_colour_manual(name = NULL, breaks = breaks,
-                                     values = var_color, labels = labels) +
-        ggplot2::labs(title = title, subtitle = subtitle,
-                      x = "\nTamaño de la librería (lecturas)",
-                      y = "Riqueza (No. de especies)\n") +
+        ggplot2::scale_x_continuous(
+            expand = c(0, 0), limits = c(0, 90000),
+            labels = scales::label_number(),
+            breaks = seq(0, 90000, by = 10000)
+        ) +
+        ggplot2::scale_colour_manual(
+            name = NULL, breaks = breaks,
+            values = var_color, labels = labels
+        ) +
+        ggplot2::labs(
+            title = title, subtitle = subtitle,
+            x = "\nTamaño de la librería (lecturas)",
+            y = "Riqueza (No. de especies)\n"
+        ) +
         ggplot2::theme_minimal() +
         ggplot2::theme(
-            text            = ggplot2::element_text(size = 15, color = "black"),
-            plot.title      = ggplot2::element_text(size = 17, face = "bold"),
+            text = ggplot2::element_text(size = 15, color = "black"),
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 # =============================================================================
 # 6. DIVERSIDAD ALFA
 # =============================================================================
- 
+
 #' adiv_table
 #' @description Tabla con métricas de diversidad alfa por muestra
 #' @param phy_object Objeto phyloseq (rarefaccionado)
 #' @param metric Vector de métricas (ej. c("Chao1", "Shannon"))
 #' @return Tibble con métricas de riqueza, diversidad, equitatividad y Faith PD
 adiv_table <- function(phy_object, metric) {
- 
     phyloseq::sample_data(phy_object)$no_reads <- phyloseq::sample_sums(phy_object)
- 
+
     phy_adiv <- phy_object %>%
         phyloseq::estimate_richness(measures = metric) %>%
         tibble::rownames_to_column(var = "sample_id") %>%
         dplyr::mutate(microbiome::rarity(phy_object))
- 
+
     faith_pd <- phy_object %>%
         btools::estimate_pd() %>%
         tibble::rownames_to_column(var = "sample_id")
- 
+
     phy_evenness <- phy_object %>%
         microbiome::evenness(index = "all") %>%
         tibble::rownames_to_column(var = "sample_id")
- 
+
     as.data.frame(phyloseq::sample_data(phy_object)) %>%
         tibble::as_tibble() %>%
         dplyr::select(sample_id, no_reads) %>%
-        dplyr::full_join(phy_adiv,     by = "sample_id") %>%
-        dplyr::full_join(faith_pd,     by = "sample_id") %>%
+        dplyr::full_join(phy_adiv, by = "sample_id") %>%
+        dplyr::full_join(faith_pd, by = "sample_id") %>%
         dplyr::full_join(phy_evenness, by = "sample_id") %>%
         dplyr::mutate(dplyr::across(where(is.numeric), round, 2)) %>%
         dplyr::mutate(sample_id = factor(sample_id))
 }
- 
- 
+
+
 #' adiv_distribution
 #' @description Distribución de métricas alfa por tipo de muestra y variable
 #' @param df_adiv Tabla de diversidad alfa (output de adiv_table)
@@ -347,7 +369,8 @@ adiv_distribution <- function(df_adiv, var, metric) {
     df_adiv %>%
         dplyr::select(sample_type, {{ var }}, dplyr::all_of(metric)) %>%
         tidyr::pivot_longer(dplyr::all_of(metric),
-                            names_to = "metric", values_to = "value") %>%
+            names_to = "metric", values_to = "value"
+        ) %>%
         dplyr::filter(!is.na(value), !is.na({{ var }})) %>%
         dplyr::group_by(sample_type, {{ var }}, metric) %>%
         tidyr::nest() %>%
@@ -360,8 +383,8 @@ adiv_distribution <- function(df_adiv, var, metric) {
         dplyr::ungroup() %>%
         dplyr::mutate(dplyr::across(where(is.numeric), round, 3))
 }
- 
- 
+
+
 #' ametric_plot
 #' @description Gráfica de métrica de diversidad alfa por tipo de muestra y variable
 #' @param df Tabla larga de métricas alfa
@@ -381,33 +404,41 @@ ametric_plot <- function(df, metric2graph, var, method, color, breaks,
     df %>%
         dplyr::filter(metric %in% metric2graph) %>%
         ggplot2::ggplot(ggplot2::aes(x = {{ var }}, y = value)) +
-        ggplot2::stat_summary(fun.data = ggplot2::median_hilow, fun.args = 0.50,
-                              geom = "crossbar", width = 0.5, alpha = 0.5,
-                              show.legend = FALSE) +
-        ggpubr::stat_compare_means(method = method, size = 3,
-                                   label.x.npc = .9, label.y.npc = 0.99) +
+        ggplot2::stat_summary(
+            fun.data = ggplot2::median_hilow, fun.args = 0.50,
+            geom = "crossbar", width = 0.5, alpha = 0.5,
+            show.legend = FALSE
+        ) +
+        ggpubr::stat_compare_means(
+            method = method, size = 3,
+            label.x.npc = .9, label.y.npc = 0.99
+        ) +
         ggplot2::geom_jitter(ggplot2::aes(fill = {{ var }}),
-                             height = 0, width = 0.25, shape = 21,
-                             size = 3, alpha = 0.8, color = "black",
-                             show.legend = FALSE) +
-        ggplot2::scale_fill_manual(name = NULL, values = color,
-                                   breaks = breaks, labels = labels) +
+            height = 0, width = 0.25, shape = 21,
+            size = 3, alpha = 0.8, color = "black",
+            show.legend = FALSE
+        ) +
+        ggplot2::scale_fill_manual(
+            name = NULL, values = color,
+            breaks = breaks, labels = labels
+        ) +
         ggplot2::scale_x_discrete(breaks = breaks, labels = labels) +
         ggplot2::labs(title = title, subtitle = subtitle, x = "", y = index) +
-        ggplot2::facet_wrap(~ sample_type,
-                            labeller = ggplot2::as_labeller(labeller)) +
+        ggplot2::facet_wrap(~sample_type,
+            labeller = ggplot2::as_labeller(labeller)
+        ) +
         cowplot::theme_cowplot() +
         ggplot2::theme(
-            text            = ggplot2::element_text(size = 15, color = "black"),
+            text = ggplot2::element_text(size = 15, color = "black"),
             legend.position = "none",
-            plot.title      = ggplot2::element_text(size = 17, face = "bold"),
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             strip.background = ggplot2::element_rect(color = "gray", fill = "gray"),
-            strip.text.x    = ggplot2::element_text(size = 15, color = "black"),
+            strip.text.x = ggplot2::element_text(size = 15, color = "black"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 #' asample_plot
 #' @description Gráfica de métrica alfa para una sola muestra con comparaciones
 #' @param df Tabla de métricas alfa filtrada por muestra
@@ -428,33 +459,42 @@ asample_plot <- function(df, metric2graph, var, method, my_comparisons,
                          ylimit, ylabel, color, breaks, labels,
                          title, subtitle, index) {
     df %>%
-        ggplot2::ggplot(ggplot2::aes(x = {{ var }}, y = {{ metric2graph }},
-                                     fill = {{ var }})) +
-        ggplot2::stat_summary(fun.data = ggplot2::median_hilow, fun.args = 0.50,
-                              geom = "crossbar", width = 0.5, alpha = 0.5,
-                              show.legend = FALSE) +
-        ggpubr::stat_compare_means(method = method, comparisons = my_comparisons,
-                                   label = "p.signif", bracket.size = 0.7,
-                                   color = "black", size = 5, label.y = ylabel) +
+        ggplot2::ggplot(ggplot2::aes(
+            x = {{ var }}, y = {{ metric2graph }},
+            fill = {{ var }}
+        )) +
+        ggplot2::stat_summary(
+            fun.data = ggplot2::median_hilow, fun.args = 0.50,
+            geom = "crossbar", width = 0.5, alpha = 0.5,
+            show.legend = FALSE
+        ) +
+        ggpubr::stat_compare_means(
+            method = method, comparisons = my_comparisons,
+            label = "p.signif", bracket.size = 0.7,
+            color = "black", size = 5, label.y = ylabel
+        ) +
         ggplot2::geom_jitter(ggplot2::aes(fill = {{ var }}),
-                             height = 0, width = 0.25, shape = 21,
-                             size = 3, alpha = 0.8, color = "black",
-                             show.legend = FALSE) +
-        ggplot2::scale_fill_manual(name = NULL, values = color,
-                                   breaks = breaks, labels = labels) +
+            height = 0, width = 0.25, shape = 21,
+            size = 3, alpha = 0.8, color = "black",
+            show.legend = FALSE
+        ) +
+        ggplot2::scale_fill_manual(
+            name = NULL, values = color,
+            breaks = breaks, labels = labels
+        ) +
         ggplot2::scale_x_discrete(breaks = breaks, labels = labels) +
         ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, ylimit)) +
         ggplot2::labs(title = title, subtitle = subtitle, x = "", y = index) +
         cowplot::theme_cowplot() +
         ggplot2::theme(
-            text            = ggplot2::element_text(size = 15, color = "black"),
+            text = ggplot2::element_text(size = 15, color = "black"),
             legend.position = "none",
-            plot.title      = ggplot2::element_text(size = 17, face = "bold"),
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 #' ametrics_plots
 #' @description Gráfica de múltiples métricas alfa para una sola muestra
 #' @param df Tabla larga de métricas alfa
@@ -472,35 +512,42 @@ ametrics_plots <- function(df, sample, var, method, color, breaks,
     df %>%
         dplyr::filter(sample_type == sample) %>%
         ggplot2::ggplot(ggplot2::aes(x = {{ var }}, y = value)) +
-        ggplot2::stat_summary(fun.data = ggplot2::median_hilow, fun.args = 0.50,
-                              geom = "crossbar", width = 0.5, alpha = 0.5,
-                              show.legend = FALSE) +
-        ggpubr::stat_compare_means(method = method, size = 3,
-                                   label.x.npc = .9, label.y.npc = 0.99) +
+        ggplot2::stat_summary(
+            fun.data = ggplot2::median_hilow, fun.args = 0.50,
+            geom = "crossbar", width = 0.5, alpha = 0.5,
+            show.legend = FALSE
+        ) +
+        ggpubr::stat_compare_means(
+            method = method, size = 3,
+            label.x.npc = .9, label.y.npc = 0.99
+        ) +
         ggplot2::geom_jitter(ggplot2::aes(fill = {{ var }}),
-                             height = 0, width = 0.25, shape = 21,
-                             size = 3, alpha = 0.8, color = "black",
-                             show.legend = FALSE) +
-        ggplot2::scale_fill_manual(name = NULL, values = color,
-                                   breaks = breaks, labels = labels) +
+            height = 0, width = 0.25, shape = 21,
+            size = 3, alpha = 0.8, color = "black",
+            show.legend = FALSE
+        ) +
+        ggplot2::scale_fill_manual(
+            name = NULL, values = color,
+            breaks = breaks, labels = labels
+        ) +
         ggplot2::scale_x_discrete(breaks = breaks, labels = labels) +
         ggplot2::labs(title = title, subtitle = subtitle, x = "", y = "") +
-        ggplot2::facet_wrap(~ metric, scales = "free") +
+        ggplot2::facet_wrap(~metric, scales = "free") +
         ggplot2::theme(
-            text            = ggplot2::element_text(size = 15, color = "black"),
+            text = ggplot2::element_text(size = 15, color = "black"),
             legend.position = "none",
-            plot.title      = ggplot2::element_text(size = 17, face = "bold"),
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             strip.background = ggplot2::element_rect(color = "gray"),
-            strip.text.x    = ggplot2::element_text(size = 15, color = "black"),
+            strip.text.x = ggplot2::element_text(size = 15, color = "black"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 # =============================================================================
 # 7. DIVERSIDAD BETA
 # =============================================================================
- 
+
 #' bdiv_plot
 #' @description Gráfica de ordenación para diversidad beta (PCoA, NMDS, etc.)
 #' @param phy_object Objeto phyloseq
@@ -513,25 +560,29 @@ ametrics_plots <- function(df, sample, var, method, color, breaks,
 #' @return Objeto ggplot
 bdiv_plot <- function(phy_object, ordination, bdistance, var,
                       breaks, values, labels) {
-    ord <- phyloseq::ordinate(phy_object, method = ordination,
-                              distance = bdistance)
-    p   <- phyloseq::plot_ordination(phy_object, ord, col = var)
- 
+    ord <- phyloseq::ordinate(phy_object,
+        method = ordination,
+        distance = bdistance
+    )
+    p <- phyloseq::plot_ordination(phy_object, ord, col = var)
+
     p +
         ggplot2::geom_point(size = 2, alpha = 0.75) +
         ggplot2::stat_ellipse(show.legend = FALSE) +
-        ggplot2::scale_color_manual(name = NULL, breaks = breaks,
-                                    values = values, labels = labels) +
+        ggplot2::scale_color_manual(
+            name = NULL, breaks = breaks,
+            values = values, labels = labels
+        ) +
         cowplot::theme_cowplot() +
         ggplot2::theme(
-            text            = ggplot2::element_text(size = 22, color = "black"),
+            text = ggplot2::element_text(size = 22, color = "black"),
             legend.position = "right",
-            plot.title      = ggplot2::element_text(size = 22, face = "bold"),
+            plot.title = ggplot2::element_text(size = 22, face = "bold"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 #' p.adjust.envfit
 #' @description Ajusta los p-valores de un objeto envfit
 #' @author David Zelený
@@ -549,12 +600,12 @@ p.adjust.envfit <- function(x, method = "bonferroni", n) {
     cat("Adjustment of significance by", method, "method\n")
     return(x.new)
 }
- 
- 
+
+
 # =============================================================================
 # 8. COMPOSICIÓN TAXONÓMICA
 # =============================================================================
- 
+
 #' taxa_table
 #' @description Crea tabla larga con abundancias y rangos taxonómicos por muestra
 #' @param phy_object Objeto phyloseq
@@ -572,8 +623,8 @@ taxa_table <- function(phy_object) {
             Species = "Unclassified"
         ))
 }
- 
- 
+
+
 #' top_taxa_lst
 #' @description Identifica los top n taxones más abundantes
 #' @param df_taxa Tabla de taxones (output de taxa_table)
@@ -590,8 +641,8 @@ top_taxa_lst <- function(df_taxa, tax_rank, top) {
         dplyr::slice_head(n = top) %>%
         dplyr::pull()
 }
- 
- 
+
+
 #' taxa_lst
 #' @description Identifica los top n taxones por filo
 #' @param df_taxa Tabla de taxones
@@ -611,8 +662,8 @@ taxa_lst <- function(df_taxa, tax_rank, top, phylum_vector) {
         dplyr::filter(Phylum %in% phylum_vector) %>%
         dplyr::pull({{ tax_rank }})
 }
- 
- 
+
+
 #' taxa_colid
 #' @description Tabla ancha de abundancias por taxón y muestra
 #' @param df_taxa Tabla de taxones (output de taxa_table)
@@ -625,12 +676,14 @@ taxa_colid <- function(df_taxa, tax_rank, metadata) {
         dplyr::select(sample_id, Abundance, {{ tax_rank }}) %>%
         dplyr::group_by(sample_id, {{ tax_rank }}) %>%
         dplyr::summarise(sum_abundance = sum(Abundance), .groups = "drop") %>%
-        tidyr::pivot_wider(names_from  = {{ tax_rank }},
-                           values_from = sum_abundance)
+        tidyr::pivot_wider(
+            names_from = {{ tax_rank }},
+            values_from = sum_abundance
+        )
     dplyr::inner_join(metadata, wide_tbl, by = "sample_id")
 }
- 
- 
+
+
 #' taxa_summ
 #' @description Igual que taxa_colid pero con metadatos unidos
 #' @note Wrapper de taxa_colid para compatibilidad con código anterior
@@ -641,8 +694,8 @@ taxa_colid <- function(df_taxa, tax_rank, metadata) {
 taxa_summ <- function(df_taxa, tax_rank, metadata) {
     taxa_colid(df_taxa, {{ tax_rank }}, metadata)
 }
- 
- 
+
+
 #' taxbar_by_id
 #' @description Gráfica de barras de composición por muestra individual
 #' @param df Tabla larga con taxones y abundancias
@@ -655,19 +708,23 @@ taxbar_by_id <- function(df, taxa_fill, taxa_colors) {
         dplyr::count(sample_id, wt = Abundance, sort = TRUE) %>%
         dplyr::pull(sample_id) %>%
         as.character()
- 
+
     df %>%
-        dplyr::mutate(dplyr::across(Phylum:prevalence_genus,
-                                    ~ stringr::str_replace_all(.x, "_", " "))) %>%
+        dplyr::mutate(dplyr::across(
+            Phylum:prevalence_genus,
+            ~ stringr::str_replace_all(.x, "_", " ")
+        )) %>%
         dplyr::mutate(sample_id = forcats::fct_relevel(sample_id, order_taxa_id)) %>%
-        ggplot2::ggplot(ggplot2::aes(x = sample_id, y = Abundance * 100,
-                                     fill = {{ taxa_fill }})) +
+        ggplot2::ggplot(ggplot2::aes(
+            x = sample_id, y = Abundance * 100,
+            fill = {{ taxa_fill }}
+        )) +
         ggplot2::geom_bar(stat = "identity") +
         ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 100)) +
         ggplot2::scale_fill_manual(name = NULL, values = taxa_colors)
 }
- 
- 
+
+
 #' taxbar_by_group
 #' @description Gráfica de barras de composición por variable de agrupación
 #' @param df Tabla larga con taxones
@@ -690,7 +747,7 @@ taxbar_by_group <- function(df, var, levels, labels, phylum_order,
         dplyr::arrange(dplyr::desc(mean_abundance)) %>%
         dplyr::mutate(order = dplyr::row_number()) %>%
         dplyr::select(sample_id, order)
- 
+
     df %>%
         dplyr::inner_join(order_taxa, by = "sample_id") %>%
         tidyr::drop_na(Abundance) %>%
@@ -698,27 +755,31 @@ taxbar_by_group <- function(df, var, levels, labels, phylum_order,
             sample_id = forcats::fct_reorder(factor(sample_id), order),
             var       = factor({{ var }}, levels = levels, labels = labels)
         ) %>%
-        ggplot2::ggplot(ggplot2::aes(x = sample_id, y = Abundance * 100,
-                                     fill = {{ taxa_fill }})) +
+        ggplot2::ggplot(ggplot2::aes(
+            x = sample_id, y = Abundance * 100,
+            fill = {{ taxa_fill }}
+        )) +
         ggplot2::geom_bar(stat = "identity") +
         ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 100)) +
         ggplot2::scale_fill_manual(name = NULL, values = taxa_colors) +
-        ggplot2::labs(title = title, subtitle = subtitle,
-                      fill = "Phylum", y = "Abundancia Relativa (%)\n") +
-        ggplot2::facet_wrap(~ var, scales = "free_x", nrow = 2) +
+        ggplot2::labs(
+            title = title, subtitle = subtitle,
+            fill = "Phylum", y = "Abundancia Relativa (%)\n"
+        ) +
+        ggplot2::facet_wrap(~var, scales = "free_x", nrow = 2) +
         cowplot::theme_cowplot() +
         ggplot2::theme(
-            legend.position  = "right",
-            plot.title       = ggplot2::element_text(size = 17, face = "bold"),
+            legend.position = "right",
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             strip.background = ggplot2::element_rect(color = "gray"),
-            strip.text.x     = ggplot2::element_text(size = 12, color = "black"),
-            axis.title.x     = ggplot2::element_blank(),
-            axis.text.x      = ggplot2::element_text(size = 9, angle = 90),
+            strip.text.x = ggplot2::element_text(size = 12, color = "black"),
+            axis.title.x = ggplot2::element_blank(),
+            axis.text.x = ggplot2::element_text(size = 9, angle = 90),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 #' taxbar_by_relabun
 #' @description Gráfica de barras de abundancia relativa promedio por grupo
 #' @param df Tabla larga con taxones
@@ -737,26 +798,30 @@ taxbar_by_relabun <- function(df, var, taxa_fill, breaks, levels,
         dplyr::summarise(rel_abund = sum(Abundance), .groups = "drop") %>%
         dplyr::group_by({{ var }}, Phylum, Family, Genus, {{ taxa_fill }}) %>%
         dplyr::summarise(mean_rel_abun = 100 * mean(rel_abund), .groups = "drop")
- 
+
     samtaxa_sum %>%
         tidyr::drop_na(mean_rel_abun) %>%
         dplyr::mutate(var = factor({{ var }}, levels = breaks, labels = levels)) %>%
-        ggplot2::ggplot(ggplot2::aes(x = var, y = mean_rel_abun,
-                                     fill = {{ taxa_fill }})) +
+        ggplot2::ggplot(ggplot2::aes(
+            x = var, y = mean_rel_abun,
+            fill = {{ taxa_fill }}
+        )) +
         ggplot2::geom_col() +
         ggplot2::scale_y_continuous(expand = c(0, 0)) +
         ggplot2::scale_fill_manual(name = NULL, values = taxa_colors) +
-        ggplot2::labs(title = title, subtitle = subtitle,
-                      x = NULL, y = "Abundancia relativa (%)") +
+        ggplot2::labs(
+            title = title, subtitle = subtitle,
+            x = NULL, y = "Abundancia relativa (%)"
+        ) +
         cowplot::theme_cowplot() +
         ggplot2::theme(
-            legend.position  = "right",
-            plot.title       = ggplot2::element_text(size = 17, face = "bold"),
+            legend.position = "right",
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 #' taxa2_compare_plots
 #' @description Boxplots de abundancia de taxones por grupo
 #' @param df Tabla con taxones
@@ -776,35 +841,42 @@ taxa2_compare_plots <- function(df, sample, var, color, levels, breaks,
         dplyr::filter(sample_type == sample) %>%
         dplyr::mutate(var = factor({{ var }}, levels = levels)) %>%
         ggplot2::ggplot(ggplot2::aes(x = var, y = Abundance * 100)) +
-        ggplot2::stat_summary(fun.data = ggplot2::median_hilow, fun.args = 0.50,
-                              geom = "crossbar", width = 0.5, alpha = 0.5,
-                              show.legend = FALSE) +
-        ggpubr::stat_compare_means(method = "wilcox.test", size = 3,
-                                   label.x.npc = .9, label.y.npc = 0.99) +
+        ggplot2::stat_summary(
+            fun.data = ggplot2::median_hilow, fun.args = 0.50,
+            geom = "crossbar", width = 0.5, alpha = 0.5,
+            show.legend = FALSE
+        ) +
+        ggpubr::stat_compare_means(
+            method = "wilcox.test", size = 3,
+            label.x.npc = .9, label.y.npc = 0.99
+        ) +
         ggplot2::geom_jitter(ggplot2::aes(fill = {{ var }}),
-                             height = 0, width = 0.25, shape = 21,
-                             size = 3, alpha = 0.8, color = "black",
-                             show.legend = FALSE) +
-        ggplot2::scale_fill_manual(name = NULL, values = color,
-                                   breaks = breaks, labels = labels) +
+            height = 0, width = 0.25, shape = 21,
+            size = 3, alpha = 0.8, color = "black",
+            show.legend = FALSE
+        ) +
+        ggplot2::scale_fill_manual(
+            name = NULL, values = color,
+            breaks = breaks, labels = labels
+        ) +
         ggplot2::scale_x_discrete(breaks = breaks, labels = labels) +
         ggplot2::labs(title = title, subtitle = subtitle, x = "", y = "") +
-        ggplot2::facet_wrap(~ taxa, scales = "free") +
+        ggplot2::facet_wrap(~taxa, scales = "free") +
         ggplot2::theme(
-            text            = ggplot2::element_text(size = 15, color = "black"),
+            text = ggplot2::element_text(size = 15, color = "black"),
             legend.position = "right",
-            plot.title      = ggplot2::element_text(size = 17, face = "bold"),
+            plot.title = ggplot2::element_text(size = 17, face = "bold"),
             strip.background = ggplot2::element_rect(color = "gray"),
-            strip.text.x    = ggplot2::element_text(size = 15, color = "black"),
+            strip.text.x = ggplot2::element_text(size = 15, color = "black"),
             plot.title.position = "plot"
         )
 }
- 
- 
+
+
 # =============================================================================
 # 9. CORE MICROBIOTA
 # =============================================================================
- 
+
 #' core_taxa
 #' @description Tabla de abundancia de taxones del core microbiota
 #' @param phy_object Objeto phyloseq
@@ -812,10 +884,10 @@ taxa2_compare_plots <- function(df, sample, var, color, levels, breaks,
 #' @param tax_rank Rango taxonómico (unquoted)
 #' @return Tibble con taxones del core y su abundancia total
 core_taxa <- function(phy_object, preval, tax_rank) {
-    core_list   <- microbiome::core_members(phy_object, prevalence = preval)
+    core_list <- microbiome::core_members(phy_object, prevalence = preval)
     sample_core <- phyloseq::prune_taxa(core_list, phy_object)
     sample_core <- microbiome::transform(sample_core, transform = "compositional")
- 
+
     sample_core %>%
         phyloseq::tax_glom(taxrank = "Genus") %>%
         phyloseq::psmelt() %>%
@@ -825,12 +897,12 @@ core_taxa <- function(phy_object, preval, tax_rank) {
         dplyr::summarise(sum_abundance = sum(Abundance), .groups = "drop") %>%
         dplyr::arrange(dplyr::desc(sum_abundance))
 }
- 
- 
+
+
 # =============================================================================
 # 10. ABUNDANCIA DIFERENCIAL
 # =============================================================================
- 
+
 #' taxa_relabun_by_group
 #' @description Tabla de abundancia relativa promedio por grupo y rango taxonómico
 #' @param df Tabla larga con taxones
@@ -840,23 +912,22 @@ core_taxa <- function(phy_object, preval, tax_rank) {
 #' @param taxa_rank Rango taxonómico para agrupar (unquoted)
 #' @return Dos tablas impresas: abundancias promedio y suma por grupo
 taxa_relabun_by_group <- function(df, var, taxa_fill, group_var, taxa_rank) {
- 
     samtaxa_sum <- df %>%
         dplyr::group_by({{ var }}, sample_id, Phylum, Family, Genus, {{ taxa_fill }}) %>%
         dplyr::summarise(rel_abund = sum(Abundance), .groups = "drop") %>%
         dplyr::group_by({{ var }}, Phylum, Family, Genus, {{ taxa_fill }}) %>%
         dplyr::summarise(mean_rel_abun = 100 * mean(rel_abund), .groups = "drop")
- 
+
     var_abundance <- samtaxa_sum %>%
         dplyr::group_by({{ var }}, {{ taxa_rank }}) %>%
         dplyr::summarise(suma = sum(mean_rel_abun), .groups = "drop") %>%
         dplyr::arrange({{ var }}, dplyr::desc(suma)) %>%
         dplyr::filter(suma != 0 & {{ var }} == group_var)
- 
+
     list(abundances = samtaxa_sum, by_group = var_abundance)
 }
- 
- 
+
+
 #' relabun_tbl
 #' @description Tabla de abundancia relativa por rango taxonómico y grupo
 #' @param df Tabla larga con taxones
@@ -866,20 +937,26 @@ taxa_relabun_by_group <- function(df, var, taxa_fill, group_var, taxa_rank) {
 #' @return Tibble con abundancia relativa por taxón
 relabun_tbl <- function(df, var, var_group, tax_rank) {
     taxon_tbl <- df %>%
-        dplyr::group_by({{ var }}, sample_id, Phylum, Family, Genus,
-                        prevalence_phylum, prevalence_family, prevalence_genus) %>%
+        dplyr::group_by(
+            {{ var }}, sample_id, Phylum, Family, Genus,
+            prevalence_phylum, prevalence_family, prevalence_genus
+        ) %>%
         dplyr::summarise(rel_abund = sum(Abundance), .groups = "drop") %>%
-        dplyr::group_by({{ var }}, Phylum, Family, Genus,
-                        prevalence_phylum, prevalence_family, prevalence_genus) %>%
+        dplyr::group_by(
+            {{ var }}, Phylum, Family, Genus,
+            prevalence_phylum, prevalence_family, prevalence_genus
+        ) %>%
         dplyr::summarise(mean_rel_abun = 100 * mean(rel_abund), .groups = "drop") %>%
         dplyr::filter({{ var }} == var_group)
- 
+
     taxon_tbl %>%
         dplyr::group_by({{ tax_rank }}) %>%
         dplyr::summarise(sum_abun = sum(mean_rel_abun)) %>%
         dplyr::arrange(dplyr::desc(sum_abun))
 }
- 
- 
-message("functions_microbiota.R cargado correctamente — ",
-        length(lsf.str()), " funciones disponibles")
+
+
+message(
+    "functions_microbiota.R cargado correctamente — ",
+    length(lsf.str()), " funciones disponibles"
+)
