@@ -6,6 +6,10 @@ data/processed/*
 # Outputs
 out/qiime2/
 out/phyloseq/
+out/export/
+
+# Metadatos info px
+meta/* 
 
 # Sistema
 .DS_Store
