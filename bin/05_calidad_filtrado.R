@@ -308,3 +308,5 @@ message("phy_decontam guardado")
 
 message("\n--- 05_calidad_filtrado.R completado ---")
 message("Siguiente paso: 06_composicion_core.R")
+
+print(phy_raw)
