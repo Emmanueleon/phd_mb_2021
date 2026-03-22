@@ -1,31 +1,25 @@
 #' @title: Importación datos pools de Qiime
 #' @author: Emmanuel Cervantes Monroy
 #' @date: Marzo 2026 (Original: 2021)
-#' @description: Importar y fusionar los artefactos generados por QIIME2 (.qza)
-#'   de los 10 pools de secuenciación en un objeto phyloseq conjunto (phy_raw).
-#'   Incluye metadatos de microbiota, tablas de OTUs, taxonomía y árbol filogenético.
+#' @description: Importar y fusionar los artefactos generados por QIIME2 (.biom, .tsv, .nwk) 
+#' de los 10 pools de secuenciación en un objeto phyloseq conjunto (phy_raw), sin depender de qiime2R. 
+
 
 
 # Entradas:
-#   out/qiime2/Pool*/  — artefactos .qza por pool (table, rooted-tree, taxonomy)
+#   feature-table.biom  — tabla de ASVs
+#   taxonomy.tsv        — clasificación taxonómica
+#   tree.nwk            — árbol filogenético enraizado
 #   meta/metadata_Pool*.tsv — metadatos por pool
-#   Google Sheets       — metadata conjunto
+#   data/processed/master_data.RDS — metadatos clínicos (opcional, para join)
 
 # Salidas:
 #   phy_raw.RDS         — Objeto phyloseq crudo conjunto
 #   metadata_mb.RDS     — Metadatos de microbiota
-#   otu_singles.RData   — Tablas OTU por pool
-#   taxa_singles.RData  — Tablas de taxonomía por pool
 #   pools_singles.RData — Objetos phyloseq por pool
 
-# NOTA ÁRBOL FILOGENÉTICO:
-#   El árbol actual es provisional (rtree + set.seed).
-#   Pendiente sustituir por árbol real de QIIME2 cuando se recuperen
-#   los archivos .qza completos con la asesora de tesis.
-#   El resto del script NO cambia al hacer esa sustitución.
 
-
-# Anterior: 03_master_data.R
+# Anterior: 00_export_qiime2.sh
 
 # Siguiente: 05_calidad_filtrado.R
 
@@ -38,9 +32,20 @@ rm(list = ls())
 
 ## Cargar librerías
 suppressPackageStartupMessages({
+    library(phyloseq)
+    library(biomformat)
+    library(ape)
     library(tidyverse)
     library(here)
 })
 
 ## Cear carpeta de salida
-dir.create(here("data", "processed"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("out", "phyloseq"), recursive = TRUE, showWarnings = FALSE)
+
+## Rutas de salida
+out <- list(
+    phy_raw       = here("out", "phyloseq", "phy_raw.RDS"),
+    metadata_mb   = here("out", "phyloseq", "metadata_mb.RDS"),
+    pools_singles = here("out", "phyloseq", "pools_singles.RData")
+)
+

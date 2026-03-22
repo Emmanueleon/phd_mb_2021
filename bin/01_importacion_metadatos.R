@@ -1,7 +1,7 @@
 #' @title: Importación Metadatos
 #' @author: Emmanuel Cervantes Monroy
 #' @date: Marzo 2026 (Original: 2021)
-#' @description: DDescargar las bases de datos crudas desde Google Sheets y guardarlas
+#' @description: Descargar las bases de datos crudas desde Google Sheets y guardarlas
 #  localmente en formato .RDS.
 
 
