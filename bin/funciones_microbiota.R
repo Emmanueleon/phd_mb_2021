@@ -13,7 +13,7 @@
 # 1. IMPORTACIÓN PHYLOSEQ
 # =============================================================================
 
-#' build_phyloseq
+#' @title build_phyloseq
 #' @description Construye un objeto phyloseq desde los archivos exportados por QIIME2
 #' @param pool Nombre del pool (ej. "PoolA")
 #' @param metadata_path Ruta al archivo .tsv de metadatos del pool
@@ -61,3 +61,22 @@ build_phyloseq <- function(pool, metadata_path) {
 }
 
 message("funciones_microbiota.R cargado — build_phyloseq disponible")
+
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+## Calidad y filtrado   
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#' @title reads_tbl
+#' @description Crear una tabla con el número de lecturas de secuenciación por muestra para determinado objeto phyloseq.
+#' @param phy_object Objeto phyloseq a evaluar
+#' @param sample_levels Vector de niveles de muestra a considerar
+#' @return Tabla con el número de lecturas por muestra
+
+reads_tbl <- function(phy_object, sample_levels) {
+    sample_data(phy_object)$reads <- sample_sums(phy_object)
+    data.frame(sample_data(phy_object)) %>%
+        tibble::rownames_to_column(var = "sample_id") %>% # convertir rownames a columna para formato tidyverse
+        as_tibble() %>%
+        filter(sample %in% sample_levels) %>%
+        select(sample_id, sample, reads)
+}

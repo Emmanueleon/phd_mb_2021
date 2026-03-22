@@ -7,6 +7,9 @@ data/processed/*
 out/qiime2/
 out/phyloseq/
 out/export/
+out/tables/
+out/figures/
+
 
 # Metadatos info px
 meta/* 
