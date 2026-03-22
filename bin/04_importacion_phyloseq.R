@@ -53,29 +53,29 @@ source(here("bin", "funciones_microbiota.R"))
 
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::
-# 1. Construir phyloseq por pool
+# Construir phyloseq por pool
 # ::::::::::::::::::::::::::::::::::::::::::::::::
 
 message("Construyendo objetos phyloseq por pool...")
 
 
 ## Primera corrida::::::::::::::::::::::::::::::::::::::::::::
-message("  Pool A...")
+message("Pool A...")
 phy_a <- build_phyloseq("PoolA", here("meta", "metadata_PoolA.tsv"))
 phy_a <- prune_samples(c("B116", "M116", "M120"), phy_a)
 message("    ", nsamples(phy_a), " muestras conservadas")
 
-message("  Pool B...")
+message("Pool B...")
 phy_b <- build_phyloseq("PoolB", here("meta", "metadata_PoolB.tsv"))
 phy_b <- prune_samples(c("B124", "B131", "L134", "M123"), phy_b)
 message("    ", nsamples(phy_b), " muestras conservadas")
 
-message("  Pool C...")
+message("Pool C...")
 phy_c <- build_phyloseq("PoolC", here("meta", "metadata_PoolC.tsv"))
 phy_c <- prune_samples(c("B68", "L140", "L141", "M66"), phy_c)
 message("    ", nsamples(phy_c), " muestras conservadas")
 
-message("  Pool D...")
+message("Pool D...")
 phy_d <- build_phyloseq("PoolD", here("meta", "metadata_PoolD.tsv"))
 phy_d <- prune_samples(c(
     "B118", "B130", "B87", "C_Heces", "C_Leche", "H2O",
@@ -85,25 +85,25 @@ message("    ", nsamples(phy_d), " muestras conservadas (incluye controles)")
 
 
 ## Pool estandarizacion ::::::::::::::::::::::::::::::::::::::::::::
-message("  Pool Milk...")
+message("Pool Milk...")
 phy_milk <- build_phyloseq("Poolmilk", here("meta", "metadata_Poolmilk.tsv"))
 phy_milk <- prune_samples(c("L1386B"), phy_milk)
 message("    ", nsamples(phy_milk), " muestra conservada")
 
 
 ## Julio 2021 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-message("  Pool AX...")
+message("Pool AX...")
 phy_ax <- build_phyloseq("PoolAX", here("meta", "metadata_PoolAX.tsv"))
 message("    ", nsamples(phy_ax), " muestras conservadas")
 
 
 ## Septiembre 2021 :::::::::::::::::::::::::::::::::::::::::::::::::::::
-message("  Pool AZ...")
+message("Pool AZ...")
 phy_az <- build_phyloseq("PoolAZ", here("meta", "metadata_PoolAZ.tsv"))
 phy_az <- prune_samples(setdiff(sample_names(phy_az), c("M66")), phy_az)
 message("    ", nsamples(phy_az), " muestras conservadas")
 
-message("  Pool BZ...")
+message("Pool BZ...")
 phy_bz <- build_phyloseq("PoolBZ", here("meta", "metadata_PoolBZ.tsv"))
 phy_bz <- prune_samples(setdiff(
     sample_names(phy_bz),
@@ -112,13 +112,13 @@ phy_bz <- prune_samples(setdiff(
 message("    ", nsamples(phy_bz), " muestras conservadas")
 message("    PENDIENTE: confirmar exclusion de L131 con Dra. Sofia")
 
-message("  Pool CZ...")
+message("Pool CZ...")
 phy_cz <- build_phyloseq("PoolCZ", here("meta", "metadata_PoolCZ.tsv"))
 phy_cz <- prune_samples(setdiff(sample_names(phy_cz), c("L131")), phy_cz)
 message("    ", nsamples(phy_cz), " muestras conservadas")
 message("    PENDIENTE: confirmar exclusion de L131 con Dra. Sofia")
 
-message("  Pool DZ...")
+message("Pool DZ...")
 phy_dz <- build_phyloseq("PoolDZ", here("meta", "metadata_PoolDZ.tsv"))
 phy_dz <- prune_samples(setdiff(sample_names(phy_dz), c("M120")), phy_dz)
 message("    ", nsamples(phy_dz), " muestras conservadas")
@@ -169,7 +169,7 @@ taxa_raw <- merge_phyloseq(
     taxa_az, taxa_bz, taxa_cz, taxa_dz
 )
 
-message("  ASVs totales: ", nrow(otu_raw))
+message("ASVs totales: ", nrow(otu_raw))
 
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::
@@ -206,7 +206,7 @@ message("  Muestras totales: ", nrow(meta_raw))
 # 5. Arbol provisional reproducible
 # ::::::::::::::::::::::::::::::::::::::::::::::::
 message("Generando arbol provisional (set.seed = 2021)...")
-message("  PENDIENTE: sustituir por arbol real al rehacer QIIME2 desde fastq.gz")
+message("PENDIENTE: sustituir por arbol real al rehacer QIIME2 desde fastq.gz")
 
 set.seed(2021)
 tree_raw <- rtree(
