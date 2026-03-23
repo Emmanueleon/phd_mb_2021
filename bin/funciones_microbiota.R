@@ -208,3 +208,38 @@ taxa_colid <- function(df_taxa, tax_rank, metadata) {
         )
     dplyr::inner_join(metadata, wide_tbl, by = "key")
 }
+
+#' @title adiv_table
+#' @description Tabla con métricas de diversidad alfa por muestra
+#' @param phy_object Objeto phyloseq rarefaccionado con árbol
+#' @param metric Vector de métricas para estimate_richness
+#' @return Tibble con métricas de riqueza, diversidad, equitatividad y Faith PD
+adiv_table <- function(phy_object, metric) {
+
+    sample_data(phy_object)$no_reads <- sample_sums(phy_object)
+
+    ## Riqueza y diversidad
+    phy_adiv <- phy_object %>%
+        phyloseq::estimate_richness(measures = metric) %>%
+        tibble::rownames_to_column(var = "key")
+
+    ## Faith PD con picante
+    otu_mat <- as.data.frame(t(otu_table(phy_object)))
+    tree    <- phy_tree(phy_object)
+    faith   <- picante::pd(otu_mat, tree, include.root = FALSE) %>%
+        tibble::rownames_to_column(var = "key") %>%
+        dplyr::select(key, PD)
+
+    ## Equitatividad
+    phy_evenness <- phy_object %>%
+        microbiome::evenness(index = "all") %>%
+        tibble::rownames_to_column(var = "key")
+
+    ## Metadatos
+    data.frame(sample_data(phy_object)) %>%
+        tibble::rownames_to_column(var = "key") %>%
+        dplyr::full_join(phy_adiv,     by = "key") %>%
+        dplyr::full_join(faith,        by = "key") %>%
+        dplyr::full_join(phy_evenness, by = "key") %>%
+        dplyr::mutate(dplyr::across(where(is.numeric), round, 2))
+}
