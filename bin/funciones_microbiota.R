@@ -238,8 +238,9 @@ adiv_table <- function(phy_object, metric) {
     ## Metadatos
     data.frame(sample_data(phy_object)) %>%
         tibble::rownames_to_column(var = "key") %>%
+        dplyr::select(key, sample, no_reads) %>%
         dplyr::full_join(phy_adiv,     by = "key") %>%
         dplyr::full_join(faith,        by = "key") %>%
         dplyr::full_join(phy_evenness, by = "key") %>%
-        dplyr::mutate(dplyr::across(where(is.numeric), round, 2))
+        dplyr::mutate(dplyr::across(where(is.numeric), \(x) round(x, 2)))
 }
