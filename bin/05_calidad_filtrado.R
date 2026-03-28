@@ -90,24 +90,15 @@ taxa_bz <- tax_table(phy_bz)
 taxa_cz <- tax_table(phy_cz)
 taxa_dz <- tax_table(phy_dz)
 
-## Metadatos estandarizados por lote
-cols_standard <- c(
-    "barcode.sequence", "match", "place", "sample",
-    "imc", "fat", "delivery", "sex"
-)
-
-get_meta <- function(phy) {
-    as.data.frame(sample_data(phy))[, cols_standard]
-}
 
 ### Primer lote
 message("  Primer lote (A, B, C, D, AX, milk)...")
 
-meta_first <- do.call(rbind, lapply(
-    list(phy_a, phy_b, phy_c, phy_d, phy_ax, phy_milk),
-    get_meta
-))
-meta_first <- sample_data(meta_first)
+meta_first <- data.frame(sample_data(phy_raw)) %>%
+    filter(rownames(.) %in% c(sample_names(phy_a), sample_names(phy_b),
+                               sample_names(phy_c), sample_names(phy_d),
+                               sample_names(phy_ax), sample_names(phy_milk))) %>%
+    sample_data()
 
 otu_first <- merge_phyloseq(otu_a, otu_b, otu_c, otu_d, otu_milk, otu_ax)
 taxa_first <- merge_phyloseq(taxa_a, taxa_b, taxa_c, taxa_d, taxa_milk, taxa_ax)
@@ -127,11 +118,10 @@ message("    ASVs removidos: ", ntaxa(phy_first) - ntaxa(phy_decontam_first))
 ### Segundo lote
 message("  Segundo lote (AZ, BZ, CZ, DZ)...")
 
-meta_second <- do.call(rbind, lapply(
-    list(phy_az, phy_bz, phy_cz, phy_dz),
-    get_meta
-))
-meta_second <- sample_data(meta_second)
+meta_second <- data.frame(sample_data(phy_raw)) %>%
+    filter(rownames(.) %in% c(sample_names(phy_az), sample_names(phy_bz),
+                               sample_names(phy_cz), sample_names(phy_dz))) %>%
+    sample_data()
 
 otu_second <- merge_phyloseq(otu_az, otu_bz, otu_cz, otu_dz)
 taxa_second <- merge_phyloseq(taxa_az, taxa_bz, taxa_cz, taxa_dz)
@@ -160,11 +150,10 @@ taxa_decontam <- merge_phyloseq(
     tax_table(phy_decontam_second)
 )
 
-meta_decontam <- do.call(rbind, lapply(
-    list(phy_decontam_first, phy_decontam_second),
-    get_meta
-))
-meta_decontam <- sample_data(meta_decontam)
+meta_decontam <- data.frame(sample_data(phy_raw)) %>%
+    filter(rownames(.) %in% c(sample_names(phy_decontam_first),
+                               sample_names(phy_decontam_second))) %>%
+    sample_data()
 
 ## Arbol provisional reproducible
 set.seed(2021)
@@ -308,5 +297,3 @@ message("phy_decontam guardado")
 
 message("\n--- 05_calidad_filtrado.R completado ---")
 message("Siguiente paso: 06_composicion_core.R")
-
-print(phy_raw)

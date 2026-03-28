@@ -223,11 +223,36 @@ message("Ensamblando objeto phyloseq final...")
 
 phy_raw <- merge_phyloseq(otu_raw, taxa_raw, meta, tree_raw)
 
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# 7. Enriquecer sample_data con variables derivadas
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+message("Añadiendo variables derivadas al sample_data...")
+
+## Cargar master_data para join
+master_data <- readRDS(here("data", "processed", "master_data.RDS"))
+
+## Seleccionar variables interes
+vars_extra <- master_data %>%
+    select(px_num, mom_age30, nutc_3gps, iom.gain) %>%
+    rename(match = px_num) 
+
+
+## Crear  data frame del phy_raw
+meta_enriquecida <- data.frame(sample_data(phy_raw)) %>%
+    tibble::rownames_to_column(var = "sample_id") %>%
+    left_join(vars_extra, by = "match") %>%
+    tibble::column_to_rownames("sample_id")
+
+## Reasignar el phyloseq al nuevo sample_data
+sample_data(phy_raw) <- sample_data(meta_enriquecida)
+
 message("\n--- Validacion phy_raw ---")
 message("Muestras : ", nsamples(phy_raw))
 message("ASVs     : ", ntaxa(phy_raw))
 message("Variables: ", length(sample_variables(phy_raw)))
-print(phy_raw)
+message("Variables en sample_data: ",
+        paste(colnames(sample_data(phy_raw)), collapse = ", "))
 
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::

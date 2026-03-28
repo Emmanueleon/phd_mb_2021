@@ -94,8 +94,10 @@ taxa_table <- function(phy_object) {
         tibble::as_tibble() %>%
         dplyr::rename(key = Sample) %>%
         dplyr::select(key, sample, Abundance, OTU, Kingdom:Species) %>%
-        dplyr::mutate(across(Kingdom:Species,
-                             ~ gsub("^[a-z]__", "", .x))) %>%
+        dplyr::mutate(across(
+            Kingdom:Species,
+            ~ gsub("^[a-z]__", "", .x)
+        )) %>%
         tidyr::replace_na(list(
             Kingdom = "Unclassified", Phylum  = "Unclassified",
             Class   = "Unclassified", Order   = "Unclassified",
@@ -173,7 +175,7 @@ taxa_relabun_by_group <- function(df, var, taxa_fill, group_var, taxa_rank) {
 #' @param tax_rank Rango taxonomico (unquoted)
 #' @return Tibble con taxones del core y su abundancia total
 core_taxa <- function(phy_object, preval, tax_rank) {
-    core_list   <- microbiome::core_members(phy_object, prevalence = preval)
+    core_list <- microbiome::core_members(phy_object, prevalence = preval)
     sample_core <- phyloseq::prune_taxa(core_list, phy_object)
     sample_core <- microbiome::transform(sample_core, transform = "compositional")
 
@@ -181,8 +183,10 @@ core_taxa <- function(phy_object, preval, tax_rank) {
         phyloseq::tax_glom(taxrank = "Genus") %>%
         phyloseq::psmelt() %>%
         tibble::as_tibble() %>%
-        dplyr::mutate(across(Kingdom:Genus,
-                             ~ gsub("^[a-z]__", "", .x))) %>%
+        dplyr::mutate(across(
+            Kingdom:Genus,
+            ~ gsub("^[a-z]__", "", .x)
+        )) %>%
         dplyr::select({{ tax_rank }}, Abundance) %>%
         dplyr::group_by({{ tax_rank }}) %>%
         dplyr::summarise(sum_abundance = sum(Abundance), .groups = "drop") %>%
@@ -209,13 +213,15 @@ taxa_colid <- function(df_taxa, tax_rank, metadata) {
     dplyr::inner_join(metadata, wide_tbl, by = "key")
 }
 
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# Funcion principal de diversidad alfa
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #' @title adiv_table
 #' @description Tabla con métricas de diversidad alfa por muestra
 #' @param phy_object Objeto phyloseq rarefaccionado con árbol
 #' @param metric Vector de métricas para estimate_richness
 #' @return Tibble con métricas de riqueza, diversidad, equitatividad y Faith PD
 adiv_table <- function(phy_object, metric) {
-
     sample_data(phy_object)$no_reads <- sample_sums(phy_object)
 
     ## Riqueza y diversidad
@@ -225,8 +231,8 @@ adiv_table <- function(phy_object, metric) {
 
     ## Faith PD con picante
     otu_mat <- as.data.frame(t(otu_table(phy_object)))
-    tree    <- phy_tree(phy_object)
-    faith   <- picante::pd(otu_mat, tree, include.root = FALSE) %>%
+    tree <- phy_tree(phy_object)
+    faith <- picante::pd(otu_mat, tree, include.root = FALSE) %>%
         tibble::rownames_to_column(var = "key") %>%
         dplyr::select(key, PD)
 
@@ -239,8 +245,114 @@ adiv_table <- function(phy_object, metric) {
     data.frame(sample_data(phy_object)) %>%
         tibble::rownames_to_column(var = "key") %>%
         dplyr::select(key, sample, no_reads) %>%
-        dplyr::full_join(phy_adiv,     by = "key") %>%
-        dplyr::full_join(faith,        by = "key") %>%
+        dplyr::full_join(phy_adiv, by = "key") %>%
+        dplyr::full_join(faith, by = "key") %>%
         dplyr::full_join(phy_evenness, by = "key") %>%
         dplyr::mutate(dplyr::across(where(is.numeric), \(x) round(x, 2)))
+}
+
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# Funcion diversidad beta
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+#' @title run_beta
+#' @description Analisis completo de diversidad beta para una combinacion
+#'   de tipo de muestra, variable clinica y distancia
+#' @param phy Objeto phyloseq filtrado
+#' @param sample_type_val Tipo de muestra: "mom", "milk", "newborn"
+#' @param variable Variable clinica: "imc", "fat", "delivery", "sex", "mom_age30"
+#' @param distancia Distancia: "unifrac" (no ponderada) o "wunifrac" (ponderada)
+#' @param permutaciones Numero de permutaciones para PERMANOVA y ANOSIM (default: 1000)
+#' @return Lista con distancia, ordenacion, PERMANOVA, betadisper, permutest y ANOSIM
+
+run_beta <- function(phy, sample_type_val, variable,
+                     distancia = "unifrac", permutaciones = 1000) {
+    message(
+        "  Corriendo: ", sample_type_val, " ~ ", variable,
+        " [", distancia, "]"
+    )
+
+meta_cols <- colnames(as.data.frame(sample_data(phy)))
+    if (!variable %in% meta_cols) {
+        stop(
+            "La variable '", variable, "' no existe en sample_data(phy). ",
+            "Variables disponibles: ", paste(meta_cols, collapse = ", ")
+        )
+    }
+
+    ## Filtrar por tipo de muestra y eliminar NAs en la variable
+    phy_sub <- prune_samples(
+        sample_data(phy)$sample == sample_type_val,
+        phy
+    )
+
+    ## Eliminar muestras con NA en la variable de interes
+    keep <- !is.na(sample_data(phy_sub)[[variable]]) &
+        sample_data(phy_sub)[[variable]] != "na"
+    phy_sub <- prune_samples(keep, phy_sub)
+
+    ## Verificar n minimo por grupo
+    grupos <- table(sample_data(phy_sub)[[variable]])
+    if (any(grupos < 3)) {
+        warning(
+            "Grupos con n < 3 en ", sample_type_val, " ~ ", variable,
+            ". Resultados poco confiables."
+        )
+        message("    Distribucion de grupos: ")
+        print(grupos)
+    }
+
+    message("    n = ", nsamples(phy_sub), " muestras")
+
+    ## Transformacion composicional
+    phy_comp <- microbiome::transform(phy_sub, transform = "compositional")
+
+    ## Matriz de distancia
+    bdiv_distance <- phyloseq::distance(phy_comp, distancia)
+
+    ## Ordenacion PCoA
+    bdiv_ordinate <- phyloseq::ordinate(phy_comp, "PCoA", distancia)
+
+    ## Variable como vector
+    var_vector <- sample_data(phy_comp)[[variable]]
+
+    ## PERMANOVA (adonis2)
+    meta_df <- as(sample_data(phy_comp), "data.frame")
+    formula <- as.formula(paste("bdiv_distance ~", variable))
+    adonis_result <- vegan::adonis2(formula, meta_df, permutations = permutaciones)
+
+    message(
+        "    PERMANOVA R2 = ", round(adonis_result$R2[1], 3),
+        " p = ", round(adonis_result$`Pr(>F)`[1], 3)
+    )
+
+    ## Betadisper — homogeneidad de varianzas
+    bdisper_result <- vegan::betadisper(bdiv_distance, var_vector)
+    permutest_result <- vegan::permutest(bdisper_result, permutations = permutaciones)
+
+    ## ANOSIM
+    anosim_result <- vegan::anosim(bdiv_distance, var_vector,
+        permutations = permutaciones
+    )
+
+    message(
+        "    ANOSIM R = ", round(anosim_result$statistic, 3),
+        " p = ", round(anosim_result$signif, 3)
+    )
+
+    ## Retornar todos los resultados
+    list(
+        sample_type  = sample_type_val,
+        variable     = variable,
+        distancia    = distancia,
+        n            = nsamples(phy_sub),
+        grupos       = grupos,
+        distance     = bdiv_distance,
+        ordinate     = bdiv_ordinate,
+        adonis       = adonis_result,
+        bdisper      = bdisper_result,
+        permutest    = permutest_result,
+        anosim       = anosim_result
+    )
 }
