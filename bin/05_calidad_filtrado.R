@@ -202,17 +202,25 @@ phy_object <- phy_filreadtax
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 message("\n--- Filtrado de taxas no bacterianas ---")
 
-filter_tax <- c("d__Eukaryota", "Chloroplast", "Mitochondria")
+has_bad_taxon <- function(x) {
+    !is.na(x) & (
+        x == "d__Eukaryota" |
+        grepl("Chloroplast$", x) |
+        grepl("Mitochondria$", x)
+    )
+}
 
-phy_filtax <- subset_taxa(
-    phy_object,
-    !Kingdom %in% filter_tax &
-        !Phylum %in% filter_tax &
-        !Class %in% filter_tax &
-        !Order %in% filter_tax &
-        !Family %in% filter_tax &
-        !Genus %in% filter_tax
+tax_mat <- as.data.frame(tax_table(phy_object))
+keep_taxa <- !(
+    has_bad_taxon(tax_mat$Kingdom) |
+    has_bad_taxon(tax_mat$Phylum) |
+    has_bad_taxon(tax_mat$Class) |
+    has_bad_taxon(tax_mat$Order) |
+    has_bad_taxon(tax_mat$Family) |
+    has_bad_taxon(tax_mat$Genus)
 )
+
+phy_filtax <- prune_taxa(keep_taxa, phy_object)
 message("ASVs removidos: ", ntaxa(phy_object) - ntaxa(phy_filtax))
 message("ASVs restantes: ", ntaxa(phy_filtax))
 phy_object <- phy_filtax

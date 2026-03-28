@@ -101,27 +101,43 @@ message("    ", nsamples(phy_ax), " muestras conservadas")
 message("Pool AZ...")
 phy_az <- build_phyloseq("PoolAZ", here("meta", "metadata_PoolAZ.tsv"))
 phy_az <- prune_samples(setdiff(sample_names(phy_az), c("M66")), phy_az)
+if ("M85" %in% sample_names(phy_az)) {
+    ## Nota sobre el objeto publicado:
+    ## M85 corresponde a muestra materna ("mom").
+    sample_data(phy_az)$sample[sample_names(phy_az) == "M85"] <- "mom"
+}
 message("    ", nsamples(phy_az), " muestras conservadas")
+message("    M85 reasignada a 'mom' para reproducibilidad con el objeto publicado")
 
 message("Pool BZ...")
 phy_bz <- build_phyloseq("PoolBZ", here("meta", "metadata_PoolBZ.tsv"))
 phy_bz <- prune_samples(setdiff(
     sample_names(phy_bz),
-    c("B116", "B118", "L131", "M116", "M87")
+    c("B116", "B118", "M116", "M87")
 ), phy_bz)
+## Nota sobre el objeto publicado:
+## L131 se conserva en el merge final.
 message("    ", nsamples(phy_bz), " muestras conservadas")
-message("    PENDIENTE: confirmar exclusion de L131 con Dra. Sofia")
+message("    L131 conservada para reproducibilidad con el objeto publicado")
 
 message("Pool CZ...")
 phy_cz <- build_phyloseq("PoolCZ", here("meta", "metadata_PoolCZ.tsv"))
-phy_cz <- prune_samples(setdiff(sample_names(phy_cz), c("L131")), phy_cz)
+phy_cz <- phy_cz
+## Nota sobre el objeto publicado:
+## L131 se conserva en el merge final.
 message("    ", nsamples(phy_cz), " muestras conservadas")
-message("    PENDIENTE: confirmar exclusion de L131 con Dra. Sofia")
+message("    L131 conservada para reproducibilidad con el objeto publicado")
 
 message("Pool DZ...")
 phy_dz <- build_phyloseq("PoolDZ", here("meta", "metadata_PoolDZ.tsv"))
 phy_dz <- prune_samples(setdiff(sample_names(phy_dz), c("M120")), phy_dz)
+if ("L117" %in% sample_names(phy_dz)) {
+    ## Nota sobre el objeto publicado:
+    ## L117 corresponde a muestra de leche ("milk").
+    sample_data(phy_dz)$sample[sample_names(phy_dz) == "L117"] <- "milk"
+}
 message("    ", nsamples(phy_dz), " muestras conservadas")
+message("    L117 reasignada a 'milk' para reproducibilidad con el objeto publicado")
 
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::
@@ -271,5 +287,5 @@ message("pools_singles guardado")
 message("\n--- 04_importacion_phyloseq.R completado ---")
 message("Siguiente paso: 05_calidad_filtrado.R")
 message("\nPENDIENTES:")
-message("  [ ] Confirmar exclusion de L131 con Dra. Sofia")
+message("  [ ] Documentar que L131 se conserva para reproducir el objeto publicado")
 message("  [ ] Sustituir arbol provisional al rehacer QIIME2 desde fastq.gz")
